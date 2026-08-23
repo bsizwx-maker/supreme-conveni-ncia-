@@ -567,4 +567,344 @@ function renderAdminProdutos(body){
 }
 
 function renderAdminCategorias(body){
-  body.inn
+  body.innerHTML = '<button class="adm-add-btn" id="add-cat-btn">+ ADICIONAR CATEGORIA</button><div id="adm-cat-list"></div>';
+  document.getElementById("add-cat-btn").addEventListener("click", function(){ openCategoryForm(null); });
+  var list = document.getElementById("adm-cat-list");
+  var sorted = state.categories.slice().sort(function(a,b){ return (a.order||0)-(b.order||0); });
+  list.innerHTML = sorted.map(function(c){
+    var count = state.products.filter(function(p){ return p.categoryId === c.id; }).length;
+    return '<div class="adm-item">' +
+      '<div class="th" style="background:var(--black);color:#fff;font-family:JetBrains Mono, monospace;font-weight:700;">'+ (c.order||0) +'</div>' +
+      '<div class="info"><div class="n">'+escapeHtml(c.name)+'</div><div class="m">'+count+' produto(s) · <span class="pill-status '+(c.active?"pill-on":"pill-off")+'">'+(c.active?"Ativa":"Inativa")+'</span></div></div>' +
+      '<div class="acts">' +
+        '<button data-editc="'+c.id+'" title="Editar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg></button>' +
+        '<button class="del" data-delc="'+c.id+'" title="Excluir"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg></button>' +
+      '</div></div>';
+  }).join("");
+  list.querySelectorAll("[data-editc]").forEach(function(b){ b.addEventListener("click", function(){ openCategoryForm(b.getAttribute("data-editc")); }); });
+  list.querySelectorAll("[data-delc]").forEach(function(b){ b.addEventListener("click", function(){ deleteCategory(b.getAttribute("data-delc")); }); });
+}
+
+function renderAdminPedidos(body){
+  body.innerHTML = '<div class="empty-msg">Carregando pedidos...</div>';
+  db.collection("orders").orderBy("createdAt", "desc").limit(100).get().then(function(snap){
+    if(snap.empty){ body.innerHTML = '<div class="empty-msg">Nenhum pedido registrado ainda. Os pedidos aparecem aqui quando o cliente finaliza pelo WhatsApp.</div>'; return; }
+    body.innerHTML = snap.docs.map(function(doc){
+      var o = doc.data();
+      var d = o.createdAt && o.createdAt.toDate ? o.createdAt.toDate() : new Date();
+      var itensHtml = (o.itens||[]).map(function(it){ return '<div style="display:flex;justify-content:space-between;"><span>'+escapeHtml(it.nome)+' x'+it.qty+'</span><span>'+money(it.preco*it.qty)+'</span></div>'; }).join("");
+      return '<div class="order-log">' +
+        '<div class="oh"><span>'+escapeHtml(o.cliente||"")+'</span><span>'+d.toLocaleDateString('pt-BR')+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})+'</span></div>' +
+        '<div style="color:var(--gray);margin-bottom:6px;">'+escapeHtml(o.endereco||"")+' · '+escapeHtml(o.telefone||"")+'</div>' +
+        itensHtml +
+        '<div style="border-top:1px dashed var(--line);margin-top:6px;padding-top:6px;display:flex;justify-content:space-between;font-weight:700;"><span>Total ('+escapeHtml(o.pagamento||"")+')</span><span>'+money(o.total||0)+'</span></div>' +
+      '</div>';
+    }).join("");
+  }).catch(function(err){ console.error(err); body.innerHTML = '<div class="empty-msg">Erro ao carregar pedidos.</div>'; });
+}
+
+function renderAdminConfig(body){
+  var s = state.settings;
+  body.innerHTML =
+    '<div class="settings-card"><h4>Configurações de entrega</h4>' +
+      '<div class="field"><label>Frete normal (R$)</label><input type="number" step="0.01" id="cfg-freteNormal" value="'+s.freteNormal+'"></div>' +
+      '<div class="field"><label>Frete somente cigarro (R$)</label><input type="number" step="0.01" id="cfg-freteCigarro" value="'+s.freteCigarro+'"></div>' +
+      '<div class="field"><label>Pedido mínimo (R$, não conta cigarro)</label><input type="number" step="0.01" id="cfg-pedidoMinimo" value="'+s.pedidoMinimo+'"></div>' +
+      '<div class="field"><label>Horário especial (após)</label><input type="text" id="cfg-horario" value="'+escapeHtml(s.horarioEspecial)+'"></div>' +
+      '<div class="field"><label>Observação sobre frete</label><textarea id="cfg-obs">'+escapeHtml(s.observacao)+'</textarea></div>' +
+    '</div>' +
+    '<div class="settings-card"><h4>Acesso ao painel</h4>' +
+      '<p style="font-size:12px;color:var(--gray);margin:0 0 4px;">Para criar ou trocar quem pode acessar este painel, use a aba <b>Authentication</b> no Console do Firebase (não é feito por aqui, por segurança).</p>' +
+    '</div>' +
+    '<div class="adm-err" id="cfg-err"></div>' +
+    '<button class="btn-primary" id="cfg-save" style="background:var(--black);">Salvar configurações</button>';
+
+  document.getElementById("cfg-save").addEventListener("click", function(){
+    var err = document.getElementById("cfg-err");
+    var fn = parseFloat(document.getElementById("cfg-freteNormal").value);
+    var fc = parseFloat(document.getElementById("cfg-freteCigarro").value);
+    var pm = parseFloat(document.getElementById("cfg-pedidoMinimo").value);
+    var hr = document.getElementById("cfg-horario").value.trim();
+    var obs = document.getElementById("cfg-obs").value.trim();
+    if(isNaN(fn) || isNaN(fc) || isNaN(pm)){ err.textContent = "Preencha todos os valores corretamente."; return; }
+    db.collection("settings").doc("config").set({freteNormal:fn, freteCigarro:fc, pedidoMinimo:pm, horarioEspecial:hr, observacao:obs})
+      .then(function(){ showToast("Configurações salvas!"); })
+      .catch(function(e){ err.textContent = "Erro ao salvar: " + e.message; });
+  });
+}
+
+/* ===================== PRODUCT FORM ===================== */
+function activeCategoriesForSelect(){
+  return state.categories.slice().sort(function(a,b){ return (a.order||0)-(b.order||0); }).map(function(c){
+    return '<option value="'+c.id+'">'+escapeHtml(c.name)+(c.active?"":" (inativa)")+'</option>';
+  }).join("");
+}
+function setSwitch(id, on){ var el = document.getElementById(id); if(on) el.classList.add("on"); else el.classList.remove("on"); }
+function isSwitchOn(id){ return document.getElementById(id).classList.contains("on"); }
+
+function resetProductForm(){
+  document.getElementById("pf-nome").value = "";
+  document.getElementById("pf-preco").value = "";
+  document.getElementById("pf-desc").value = "";
+  document.getElementById("pf-file").value = "";
+  document.getElementById("photo-preview").style.display = "none";
+  document.getElementById("photo-drop-label").style.display = "block";
+  document.getElementById("photo-drop-label").textContent = "Toque para escolher uma foto";
+  document.getElementById("pf-disp").classList.add("on");
+  document.getElementById("pf-cig").classList.remove("on");
+  document.getElementById("pf-ativo").classList.add("on");
+  document.getElementById("pf-hasvar").classList.remove("on");
+  document.getElementById("pf-price-wrap").style.display = "block";
+  document.getElementById("pf-variants-wrap").style.display = "none";
+  document.getElementById("pf-err").textContent = "";
+  state.pendingPhotoFile = null;
+  state.pendingPhotoPreview = null;
+  state.pendingVariants = [];
+  renderVariantRows();
+  document.getElementById("pf-categoria").innerHTML = activeCategoriesForSelect();
+}
+
+function renderVariantRows(){
+  var list = document.getElementById("pf-variant-list");
+  list.innerHTML = state.pendingVariants.map(function(v, idx){
+    return '<div class="variant-row" data-idx="'+idx+'">' +
+      '<input type="text" placeholder="Nome (ex: Morango)" value="'+escapeHtml(v.name)+'" data-vfield="name" data-vidx="'+idx+'">' +
+      '<input type="number" step="0.01" min="0" placeholder="Preço" value="'+(v.price!=null?v.price:'')+'" data-vfield="price" data-vidx="'+idx+'">' +
+      '<button type="button" class="variant-avail" data-vtoggle="'+idx+'" title="Disponível">' +
+        (v.available ? '<svg viewBox="0 0 24 24" fill="none" stroke="#1a7a37" stroke-width="2.5" stroke-linecap="round"><path d="M20 6 9 17l-5-5"/></svg>' : '<svg viewBox="0 0 24 24" fill="none" stroke="#a11d1d" stroke-width="2.5" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>') +
+      '</button>' +
+      '<button type="button" class="v-rm" data-vrm="'+idx+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg></button>' +
+    '</div>';
+  }).join("") || '<div style="font-size:12px;color:var(--gray);padding:6px 2px;">Nenhuma opção adicionada ainda.</div>';
+
+  list.querySelectorAll("[data-vfield]").forEach(function(inp){
+    inp.addEventListener("input", function(){
+      var idx = parseInt(inp.getAttribute("data-vidx"), 10);
+      var field = inp.getAttribute("data-vfield");
+      if(field === "price"){ state.pendingVariants[idx].price = parseFloat(inp.value); }
+      else { state.pendingVariants[idx].name = inp.value; }
+    });
+  });
+  list.querySelectorAll("[data-vtoggle]").forEach(function(b){
+    b.addEventListener("click", function(){
+      var idx = parseInt(b.getAttribute("data-vtoggle"), 10);
+      state.pendingVariants[idx].available = !state.pendingVariants[idx].available;
+      renderVariantRows();
+    });
+  });
+  list.querySelectorAll("[data-vrm]").forEach(function(b){
+    b.addEventListener("click", function(){
+      var idx = parseInt(b.getAttribute("data-vrm"), 10);
+      state.pendingVariants.splice(idx, 1);
+      renderVariantRows();
+    });
+  });
+}
+
+function openProductForm(productId){
+  resetProductForm();
+  state.editingProductId = productId;
+  document.getElementById("pf-title").textContent = productId ? "Editar produto" : "Adicionar produto";
+  if(productId){
+    var p = state.products.find(function(pp){ return pp.id === productId; });
+    if(p){
+      document.getElementById("pf-nome").value = p.name;
+      document.getElementById("pf-preco").value = p.price;
+      document.getElementById("pf-desc").value = p.description || "";
+      document.getElementById("pf-categoria").value = p.categoryId;
+      setSwitch("pf-disp", p.available);
+      setSwitch("pf-cig", p.isCigarette);
+      setSwitch("pf-ativo", p.active);
+      if(p.photoURL){
+        document.getElementById("photo-preview").src = p.photoURL;
+        document.getElementById("photo-preview").style.display = "block";
+        document.getElementById("photo-drop-label").style.display = "none";
+      }
+      if(hasVariants(p)){
+        setSwitch("pf-hasvar", true);
+        document.getElementById("pf-price-wrap").style.display = "none";
+        document.getElementById("pf-variants-wrap").style.display = "block";
+        state.pendingVariants = p.variants.map(function(v){ return {id:v.id, name:v.name, price:v.price, available:v.available}; });
+        renderVariantRows();
+      }
+    }
+  }
+  openOverlay("product-form-overlay");
+}
+
+function wireProductForm(){
+  document.getElementById("close-pf").addEventListener("click", function(){ closeOverlay("product-form-overlay"); });
+  document.getElementById("product-form-overlay").addEventListener("click", function(e){ if(e.target === this) closeOverlay("product-form-overlay"); });
+  ["pf-disp","pf-cig","pf-ativo"].forEach(function(id){ document.getElementById(id).addEventListener("click", function(){ this.classList.toggle("on"); }); });
+
+  document.getElementById("pf-hasvar").addEventListener("click", function(){
+    this.classList.toggle("on");
+    var on = this.classList.contains("on");
+    document.getElementById("pf-price-wrap").style.display = on ? "none" : "block";
+    document.getElementById("pf-variants-wrap").style.display = on ? "block" : "none";
+    if(on && state.pendingVariants.length === 0){
+      state.pendingVariants.push({id: uid("var"), name:"", price:null, available:true});
+      renderVariantRows();
+    }
+  });
+  document.getElementById("pf-add-variant").addEventListener("click", function(){
+    state.pendingVariants.push({id: uid("var"), name:"", price:null, available:true});
+    renderVariantRows();
+  });
+
+  document.getElementById("pf-file").addEventListener("change", function(e){
+    var file = e.target.files[0];
+    if(!file) return;
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      var img = new Image();
+      img.onload = function(){
+        var maxW = 900;
+        var scale = Math.min(1, maxW / img.width);
+        var canvas = document.createElement("canvas");
+        canvas.width = img.width * scale; canvas.height = img.height * scale;
+        var ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(function(blob){
+          state.pendingPhotoFile = blob;
+          state.pendingPhotoPreview = canvas.toDataURL("image/jpeg", 0.8);
+          document.getElementById("photo-preview").src = state.pendingPhotoPreview;
+          document.getElementById("photo-preview").style.display = "block";
+          document.getElementById("photo-drop-label").style.display = "none";
+        }, "image/jpeg", 0.8);
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  document.getElementById("pf-save").addEventListener("click", async function(){
+    var saveBtn = this;
+    var err = document.getElementById("pf-err"); err.textContent = "";
+    var name = document.getElementById("pf-nome").value.trim();
+    var categoryId = document.getElementById("pf-categoria").value;
+    var description = document.getElementById("pf-desc").value.trim();
+    var available = isSwitchOn("pf-disp");
+    var isCigarette = isSwitchOn("pf-cig");
+    var active = isSwitchOn("pf-ativo");
+    var usesVariants = isSwitchOn("pf-hasvar");
+
+    var price = 0, variants = [];
+    if(usesVariants){
+      variants = state.pendingVariants.filter(function(v){ return v.name && v.name.trim(); }).map(function(v){
+        return {id:v.id, name:v.name.trim(), price: isNaN(v.price) || v.price == null ? 0 : v.price, available: v.available !== false};
+      });
+      if(!name || !categoryId || variants.length === 0 || variants.some(function(v){ return isNaN(v.price) || v.price < 0; })){
+        err.textContent = "Preencha nome, categoria e ao menos uma opção com nome e preço válidos.";
+        return;
+      }
+      price = Math.min.apply(null, variants.map(function(v){ return v.price; }));
+    } else {
+      price = parseFloat(document.getElementById("pf-preco").value);
+      if(!name || isNaN(price) || price < 0 || !categoryId){
+        err.textContent = "Preencha nome, preço e categoria corretamente.";
+        return;
+      }
+    }
+
+    saveBtn.disabled = true; saveBtn.textContent = "Salvando...";
+    try{
+      var id = state.editingProductId;
+      var docRef = id ? db.collection("products").doc(id) : db.collection("products").doc();
+      id = docRef.id;
+
+      var photoURL = null;
+      var existing = state.products.find(function(p){ return p.id === id; });
+      if(existing && existing.photoURL) photoURL = existing.photoURL;
+
+      if(state.pendingPhotoFile){
+        photoURL = await uploadToCloudinary(state.pendingPhotoFile, id);
+      }
+
+      var product = {name:name, price:price, categoryId:categoryId, description:description, available:available, isCigarette:isCigarette, active:active, variants:variants, photoURL: photoURL || null};
+      await docRef.set(product, {merge:false});
+
+      closeOverlay("product-form-overlay");
+      showToast(existing ? "Produto atualizado!" : "Produto adicionado!");
+    }catch(e){
+      console.error(e);
+      err.textContent = "Erro ao salvar: " + e.message;
+    }
+    saveBtn.disabled = false; saveBtn.textContent = "Salvar produto";
+  });
+}
+
+async function deleteProduct(id){
+  if(!confirm("Excluir este produto? Essa ação não pode ser desfeita.")) return;
+  try{
+    await db.collection("products").doc(id).delete();
+    showToast("Produto excluído.");
+  }catch(e){ console.error(e); showToast("Erro ao excluir produto."); }
+}
+async function toggleProductActive(id){
+  var p = state.products.find(function(pp){ return pp.id === id; });
+  if(!p) return;
+  try{ await db.collection("products").doc(id).update({active: !p.active}); }
+  catch(e){ console.error(e); showToast("Erro ao atualizar produto."); }
+}
+
+/* ===================== CATEGORY FORM ===================== */
+function openCategoryForm(catId){
+  state.editingCategoryId = catId;
+  document.getElementById("cf-title").textContent = catId ? "Editar categoria" : "Nova categoria";
+  document.getElementById("cf-err").textContent = "";
+  if(catId){
+    var c = state.categories.find(function(cc){ return cc.id === catId; });
+    document.getElementById("cf-nome").value = c.name;
+    document.getElementById("cf-ordem").value = c.order || 0;
+    setSwitch("cf-ativa", c.active);
+  } else {
+    document.getElementById("cf-nome").value = "";
+    document.getElementById("cf-ordem").value = state.categories.length + 1;
+    setSwitch("cf-ativa", true);
+  }
+  openOverlay("cat-form-overlay");
+}
+
+function wireCategoryForm(){
+  document.getElementById("close-cf").addEventListener("click", function(){ closeOverlay("cat-form-overlay"); });
+  document.getElementById("cat-form-overlay").addEventListener("click", function(e){ if(e.target === this) closeOverlay("cat-form-overlay"); });
+  document.getElementById("cf-ativa").addEventListener("click", function(){ this.classList.toggle("on"); });
+
+  document.getElementById("cf-save").addEventListener("click", async function(){
+    var err = document.getElementById("cf-err");
+    var name = document.getElementById("cf-nome").value.trim();
+    var order = parseInt(document.getElementById("cf-ordem").value, 10) || 0;
+    var active = isSwitchOn("cf-ativa");
+    if(!name){ err.textContent = "Digite o nome da categoria."; return; }
+    try{
+      var id = state.editingCategoryId;
+      var docRef = id ? db.collection("categories").doc(id) : db.collection("categories").doc();
+      await docRef.set({name:name, order:order, active:active});
+      closeOverlay("cat-form-overlay");
+      showToast(id ? "Categoria atualizada!" : "Categoria criada!");
+    }catch(e){ console.error(e); err.textContent = "Erro ao salvar: " + e.message; }
+  });
+}
+
+async function deleteCategory(id){
+  var inUse = state.products.some(function(p){ return p.categoryId === id; });
+  if(inUse){ alert("Não é possível excluir: existem produtos cadastrados nesta categoria. Mova ou exclua os produtos primeiro."); return; }
+  if(!confirm("Excluir esta categoria?")) return;
+  try{ await db.collection("categories").doc(id).delete(); showToast("Categoria excluída."); }
+  catch(e){ console.error(e); showToast("Erro ao excluir categoria."); }
+}
+
+/* ===================== BOOT ===================== */
+function boot(){
+  document.getElementById("login-logo-img").src = LOGO_DATA_URI;
+  wireAuth();
+  wireProductForm();
+  wireCategoryForm();
+}
+boot();
+
+})();
+</script>
+</body>
+</html>
