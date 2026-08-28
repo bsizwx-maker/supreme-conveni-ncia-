@@ -560,63 +560,62 @@ function computeTotals(){
     var line = unitPrice * c.qty;
     if(p.isCigarette){ cig += line; hasCig = true; } else { nonCig += line; hasNonCig = true; }
   });
-     
-var min = state.settings.pedidoMinimo;
-var freteNormal = state.settings.freteNormal;
-var freteCig = state.settings.freteCigarro;
+  var min = state.settings.pedidoMinimo,
+    freteNormal = state.settings.freteNormal,
+    freteCig = state.settings.freteCigarro;
 
-var frete = 0;
-var canCheckout = false;
-var minMsg = null;
+var frete = 0,
+    canCheckout = false,
+    minMsg = null;
 
 if (!hasCig && !hasNonCig) {
-  canCheckout = false;
+    canCheckout = false;
 
 } else if (hasCig && !hasNonCig) {
-  // Somente cigarro: pode finalizar e paga R$15 de entrega
-  frete = freteCig;
-  canCheckout = true;
+    // Somente cigarro
+    frete = freteCig;
+    canCheckout = true;
 
 } else if (hasCig && hasNonCig) {
-  // Cigarro NÃO entra no pedido mínimo
-  canCheckout = true;
+    // Com cigarro: não exige pedido mínimo
+    canCheckout = true;
 
-  if (nonCig >= min) {
-    frete = freteNormal;
-  } else {
-    frete = freteCig;
-    minMsg = "Complete o pedido com " + money(min - nonCig) +
-      " em produtos elegíveis para pagar R$10 na entrega.";
-  }
+    if (nonCig >= min) {
+        frete = freteNormal;
+    } else {
+        frete = freteCig;
+        minMsg = "Complete o pedido com " + money(min - nonCig) +
+                 " em produtos elegíveis para pagar R$10 na entrega.";
+    }
 
 } else {
-  // Sem cigarro: pedido mínimo obrigatório
-  if (nonCig >= min) {
-    frete = freteNormal;
-    canCheckout = true;
-  } else {
-    canCheckout = false;
-    minMsg = "Adicione mais " + money(min - nonCig) +
-      " em produtos para atingir o pedido mínimo de " + money(min) +
-      " e finalizar seu pedido.";
-  }
-
+    // Sem cigarro: pedido mínimo obrigatório
+    if (nonCig >= min) {
+        frete = freteNormal;
+        canCheckout = true;
+    } else {
+        canCheckout = false;
+        minMsg = "Complete o pedido mínimo de " + money(min) +
+                 " em produtos para finalizar seu pedido.";
+    }
+}
 
 var subtotal = nonCig + cig;
 var total = subtotal + (canCheckout ? frete : 0);
 
 return {
-  nonCig: nonCig,
-  cig: cig,
-  hasCig: hasCig,
-  hasNonCig: hasNonCig,
-  subtotal: subtotal,
-  frete: frete,
-  total: total,
-  canCheckout: canCheckout,
-  minMsg: minMsg
-};
-     
+    nonCig: nonCig,
+    cig: cig,
+    hasCig: hasCig,
+    hasNonCig: hasNonCig,
+    subtotal: subtotal,
+    frete: frete,
+    total: total,
+    canCheckout: canCheckout,
+    minMsg: minMsg
+};   
+
+
 /* ===================== STORE RENDER ===================== */
 function activeCategories(){
   return state.categories.filter(function(c){ return c.active; }).sort(function(a,b){ return (a.order||0)-(b.order||0); });
