@@ -560,7 +560,7 @@ function computeTotals(){
     var line = unitPrice * c.qty;
     if(p.isCigarette){ cig += line; hasCig = true; } else { nonCig += line; hasNonCig = true; }
   });
-     var min = state.settings.pedidoMinimo;
+var min = state.settings.pedidoMinimo;
 var freteNormal = state.settings.freteNormal;
 var freteCig = state.settings.freteCigarro;
 
@@ -599,7 +599,7 @@ if (!hasCig && !hasNonCig) {
       " em produtos para atingir o pedido mínimo de " + money(min) +
       " e finalizar seu pedido.";
   }
-}
+
 
 var subtotal = nonCig + cig;
 var total = subtotal + (canCheckout ? frete : 0);
