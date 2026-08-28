@@ -560,6 +560,7 @@ function computeTotals(){
     var line = unitPrice * c.qty;
     if(p.isCigarette){ cig += line; hasCig = true; } else { nonCig += line; hasNonCig = true; }
   });
+     
 var min = state.settings.pedidoMinimo;
 var freteNormal = state.settings.freteNormal;
 var freteCig = state.settings.freteCigarro;
@@ -615,6 +616,7 @@ return {
   canCheckout: canCheckout,
   minMsg: minMsg
 };
+     
 /* ===================== STORE RENDER ===================== */
 function activeCategories(){
   return state.categories.filter(function(c){ return c.active; }).sort(function(a,b){ return (a.order||0)-(b.order||0); });
