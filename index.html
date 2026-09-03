@@ -160,7 +160,6 @@
   footer.hours .h1line{font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:.06em;}
   footer.hours .h1line span{color:var(--red);}
   footer.hours .h2line{font-size:10px;color:#8a8a8e;letter-spacing:.03em;margin-top:4px;}
-  .admin-entry{display:block;text-align:center;padding:8px;font-size:10px;color:#c9c9c9;background:#0b0b0c;}
 
   /* ---------- MODAL / DRAWER SHARED ---------- */
   .overlay{
@@ -347,7 +346,6 @@
   <div class="h1line">SEGUNDA A SÁBADO — ATÉ ÀS <span>6H</span></div>
   <div class="h2line" id="footer-obs">APÓS ÀS 3H, CONSULTE O VALOR DO FRETE — PODERÁ SOFRER ALTERAÇÕES.</div>
 </footer>
-<div class="admin-entry"><a href="admin.html" target="_blank">painel administrativo</a></div>
 
 <!-- ============ CART OVERLAY ============ -->
 <div class="overlay" id="cart-overlay">
@@ -560,62 +558,25 @@ function computeTotals(){
     var line = unitPrice * c.qty;
     if(p.isCigarette){ cig += line; hasCig = true; } else { nonCig += line; hasNonCig = true; }
   });
-  var min = state.settings.pedidoMinimo,
-    freteNormal = state.settings.freteNormal,
-    freteCig = state.settings.freteCigarro;
-
-var frete = 0,
-    canCheckout = false,
-    minMsg = null;
-
-if (!hasCig && !hasNonCig) {
-    canCheckout = false;
-
-} else if (hasCig && !hasNonCig) {
-    // Somente cigarro
-    frete = freteCig;
-    canCheckout = true;
-
-} else if (hasCig && hasNonCig) {
-    // Com cigarro: não exige pedido mínimo
-    canCheckout = true;
-
-    if (nonCig >= min) {
-        frete = freteNormal;
-    } else {
-        frete = freteCig;
-        minMsg = "Complete o pedido com " + money(min - nonCig) +
-                 " em produtos elegíveis para pagar R$10 na entrega.";
+  var min = state.settings.pedidoMinimo, freteNormal = state.settings.freteNormal, freteCig = state.settings.freteCigarro;
+  var frete = 0, canCheckout = false, minMsg = null;
+  if(!hasCig && !hasNonCig){ canCheckout = false; }
+  else if(hasCig && !hasNonCig){ frete = freteCig; canCheckout = true; }
+  else if(hasCig && hasNonCig){
+    if(nonCig >= min){ frete = freteNormal; canCheckout = true; }
+    else {
+      frete = freteCig;
+      canCheckout = true;
+      minMsg = "Complete o pedido mínimo (" + money(min) + ", não conta cigarro) para pagar " + money(freteNormal) + " na entrega. Por enquanto a entrega fica " + money(freteCig) + ".";
     }
-
-} else {
-    // Sem cigarro: pedido mínimo obrigatório
-    if (nonCig >= min) {
-        frete = freteNormal;
-        canCheckout = true;
-    } else {
-        canCheckout = false;
-        minMsg = "Complete o pedido mínimo de " + money(min) +
-                 " em produtos para finalizar seu pedido.";
-    }
+  } else {
+    if(nonCig >= min){ frete = freteNormal; canCheckout = true; }
+    else { canCheckout = false; minMsg = "Adicione mais " + money(min - nonCig) + " em produtos para finalizar seu pedido."; }
+  }
+  var subtotal = nonCig + cig;
+  var total = subtotal + (canCheckout ? frete : 0);
+  return {nonCig:nonCig, cig:cig, hasCig:hasCig, hasNonCig:hasNonCig, subtotal:subtotal, frete:frete, total:total, canCheckout:canCheckout, minMsg:minMsg};
 }
-
-var subtotal = nonCig + cig;
-var total = subtotal + (canCheckout ? frete : 0);
-
-return {
-    nonCig: nonCig,
-    cig: cig,
-    hasCig: hasCig,
-    hasNonCig: hasNonCig,
-    subtotal: subtotal,
-    frete: frete,
-    total: total,
-    canCheckout: canCheckout,
-    minMsg: minMsg
-};
-}
-
 
 /* ===================== STORE RENDER ===================== */
 function activeCategories(){
