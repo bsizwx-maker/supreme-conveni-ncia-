@@ -1,0 +1,15 @@
+{
+  "name": "Supreme Conveniência — Painel Admin",
+  "short_name": "Supreme Admin",
+  "id": "/admin.html",
+  "start_url": "./admin.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b0b0c",
+  "theme_color": "#0b0b0c",
+  "icons": [
+    { "src": "icon-admin-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-admin-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
